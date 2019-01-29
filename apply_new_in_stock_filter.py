@@ -1,20 +1,22 @@
-import csv, os, time
+from tkinter.filedialog import askopenfilenames
+from tkinter import Tk
+import csv
+import os
 
 # 85 is current new-in-stock ID
 filter_to_change = "85"
-input_folder = "put csvs here/"
-output_folder = "output/"
 
-def dump_csv(filename):
+
+def dump_csv(file_name):
     """Return list of dicts mirroring table structure in filename."""
     file = []
 
     # Default to being the old-in-stock csv so if any of them don't have tag
     # 85 you can switch it to being in-stock
-    this_csv_name="old_in_stock"
+    this_csv_name = "old_in_stock"
 
     try:
-        with open(filename) as csvfile:
+        with open(file_name) as csvfile:
             reader = csv.reader(csvfile)
             reader_list = list(reader)
             for row in reader_list:
@@ -32,11 +34,13 @@ def dump_csv(filename):
                     elif reader_list[0][i] == "name":
                         rowdict["product_name"] = row[i]
                 # If this row's item doesn't have the new in stock filter already, this must be the in-stock file
-                if "filters" in rowdict and filter_to_change not in rowdict["filters"] and this_csv_name == "old_in_stock":
+                if ("filters" in rowdict
+                        and filter_to_change not in rowdict["filters"]
+                        and this_csv_name == "old_in_stock"):
                     this_csv_name = "in_stock"
                 file.append(rowdict)
     except FileNotFoundError:
-        print(f"File {filename} not found! Perhaps you named it improperly?")
+        print(f"File {file_name} not found! Perhaps you named it improperly?")
     except IndexError as ierror:
         print(f"Something went wrong with indexing in dump_csv!")
         print(ierror)
@@ -53,7 +57,8 @@ def change_filters(filter_string, filter_id, add=True):
         filters.append(filter_id)
         filters.sort()
     else:
-        if filter_id in filters: filters.remove(filter_id)
+        if filter_id in filters:
+            filters.remove(filter_id)
     return ",".join(filters)
 
 
@@ -61,11 +66,17 @@ def change_filters(filter_string, filter_id, add=True):
 output_csv = []
 
 # Dump raw data into (hopefully) three lists of dicts
+root = Tk()
+root.filenames = askopenfilenames(initialdir=os.path.abspath(os.sep),
+                                  title="Select *all three* csv files!",
+                                  filetypes=(("csv files", "*.csv"), ("all files", "*.*")))
+
 dumps = []
-for filename in os.listdir(input_folder):
-    dumps.append(dump_csv(input_folder + filename))
-while (len(dumps) < 3):
-    dumps.append(["old_in_stock"])
+new_in_stock = []
+old_in_stock = []
+in_stock = []
+for filename in root.filenames:
+    dumps.append(dump_csv(filename))
 
 for csvfile in dumps:
     if csvfile[-1] == "new_in_stock":
@@ -106,11 +117,8 @@ for row in new_in_stock:
 output_csv.extend(new_in_stock)
 
 # --- Export all to CSV ---
-with open(output_folder + "output.csv", "w", newline="") as csvfile:
+with open("output.csv", "w", newline='') as csvfile:
     fieldnames = ["product_name", "model", "filters"]
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     writer.writerows(output_csv)
-
-print("Done!")
-time.sleep(2)
