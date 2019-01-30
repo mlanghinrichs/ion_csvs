@@ -3,12 +3,12 @@ import csv
 import os
 
 
-class CSVProcessor():
+class CSVProcessor:
 
     def __init__(self, filter_to_change_id="85", path=os.path.abspath(os.sep)):
         self.path = path
         self.filter = filter_to_change_id
-        self.raw_data=[]
+        self.raw_data = []
         self.result = []
         self.file_names = ()
         # Containers for three input CSVs
@@ -23,6 +23,7 @@ class CSVProcessor():
         self.pull_existing_tags()
         self.remove_out_of_stock_new_cards()
         self.add_filter_to_new_cards()
+        self.ensure_unique_entries()
         self.export()
 
     def dump_csv(self, file_name):
@@ -63,16 +64,29 @@ class CSVProcessor():
         file.append(this_csv_name)
         self.raw_data.append(file)
 
+    def confirm_identical_filters_in_results(self, model):
+        first_tags = ""
+        for card in CSVProcessor.cards_in_csv(self.result, "model", model):
+            if not first_tags:
+                first_tags = card["filters"]
+            elif first_tags != card["filters"]:
+                return False
+        return True
+
     def get_input_file_names(self):
         """Open file dialog and stow chosen filenames in self.file_names tuple."""
         self.file_names = askopenfilenames(initialdir=self.path,
                                            title="Select *all three* csv files!",
                                            filetypes=(("csv files", "*.csv"), ("all files", "*.*")))
 
+    # TODO improve error checking
     def process_input_csvs(self):
         """Dump the CSVs into raw_data, then check their contents to name each as the appropriate list."""
         for filename in self.file_names:
             self.dump_csv(filename)
+        names = [file[-1] for file in self.raw_data]
+        if len(set(names)) != len(names):
+            raise NameError("Multiple imported CSV files appear to have the same data structure!")
         for csvfile in self.raw_data:
             if csvfile[-1] == "new_in_stock":
                 self.new_in_stock = csvfile
@@ -84,11 +98,19 @@ class CSVProcessor():
                 self.in_stock = csvfile
                 self.in_stock.pop(-1)
 
-    # TODO Make this check to make sure the cards aren't in the new list!
     def remove_old_tags(self):
         """Remove the selected filter tag from cards in the 'old in stock' list."""
         for row in self.old_in_stock:
-            row["filters"] = CSVProcessor.change_filters(row["filters"], self.filter, False)
+            card_in_new_in_stock = CSVProcessor.card_in_csv(self.new_in_stock, "model", row["model"])
+            # If this old-in-stock card isn't also a new-in-stock card, remove the new-in-stock filter
+            if not card_in_new_in_stock:
+                row["filters"] = CSVProcessor.change_filters(row["filters"], self.filter, False)
+                print(f"Removing tag {self.filter} from {row['product_name']}.")
+            # If this card IS also a new-in-stock card, leave it as-is and remove it from the new-in-stock list
+            else:
+                self.new_in_stock.remove(card_in_new_in_stock)
+                print(f"Removing {card_in_new_in_stock['product_name']} from new_in_stock.")
+
         self.result.extend(self.old_in_stock)
 
     def pull_existing_tags(self):
@@ -114,6 +136,19 @@ class CSVProcessor():
             row["filters"] = CSVProcessor.change_filters(row["filters"], self.filter)
         self.result.extend(self.new_in_stock)
 
+    # TODO Determine why there are duplicates in the first place - this is a hotfix
+    def ensure_unique_entries(self):
+        """Clear duplicates out of self.result."""
+        list_of_models = [row["model"] for row in self.result]
+        for model in set(list_of_models):
+            if CSVProcessor.all_unique_by_model(self.result):
+                break
+            while list_of_models.count(model) > 1:
+                if not self.confirm_identical_filters_in_results(model):
+                    raise UserWarning("Tried to remove duplicate cards with different filters!")
+                list_of_models.remove(model)
+                self.result.remove(CSVProcessor.card_in_csv(self.result, "model", model))
+
     def export(self):
         """Write the contents of self.result to file output.csv in the local directory."""
         with open("output.csv", "w", newline='') as csvfile:
@@ -126,16 +161,38 @@ class CSVProcessor():
     def change_filters(filter_string, filter_id, add=True):
         """Add or remove filter {filter_id} to filter_string."""
         filters = filter_string.split(",")
-        if add:
+        if add and filter_id not in filters:
             filters.append(filter_id)
             filters.sort()
-        else:
+        elif not add and filter_id in filters:
             if filter_id in filters:
                 filters.remove(filter_id)
         return ",".join(filters)
 
+    @staticmethod
+    def card_in_csv(csvfile, key, value):
+        """Check if a card is present in a processed CSV and return it if it is."""
+        for row in csvfile:
+            if row[key] == value:
+                return row
+        return {}
+
+    @staticmethod
+    def cards_in_csv(csvfile, key, value):
+        """Return all cards in a csv with card[key] == value."""
+        result = []
+        for row in csvfile:
+            if row[key] == value:
+                result.append(row)
+        return result
+
+    @staticmethod
+    def all_unique_by_model(csvfile):
+        """Return whether a csvfile has only one entry per model id."""
+        models = [row["model"] for row in csvfile]
+        return len(set(models)) == len(models)
+
 
 if __name__ == "__main__":
-    processor = CSVProcessor(path="~/Downloads")
+    processor = CSVProcessor()
     processor.main()
-
