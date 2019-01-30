@@ -1,15 +1,21 @@
 from tkinter.filedialog import askopenfilenames
 import csv
 import os
+import time
+from gi.repository import GLib
 
 
 class CSVProcessor:
 
-    def __init__(self, filter_to_change_id="85", path=os.path.abspath(os.sep)):
-        self.path = path
+    def __init__(self, filter_to_change_id="85", path=GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD)):
+        if os.path.exists(path):
+            self.path = path
+        else:
+            self.path = os.path.abspath(os.sep)
         self.filter = filter_to_change_id
         self.raw_data = []
         self.result = []
+        self.cards_sold = 0
         self.file_names = ()
         # Containers for three input CSVs
         self.new_in_stock = []
@@ -46,7 +52,7 @@ class CSVProcessor:
                     for i in range(0, len(row)):
                         if reader_list[0][i] in ("product_name", "model", "filters"):
                             rowdict[reader_list[0][i]] = row[i]
-                        # Fix the buylist report's 'name' header into the standard 'product_name' header
+                        # Rename the buylist report's 'name' header to the standard 'product_name' header
                         elif reader_list[0][i] == "name":
                             rowdict["product_name"] = row[i]
                     # If this row's item doesn't have the new in stock filter already, this must be the in-stock file
@@ -65,6 +71,7 @@ class CSVProcessor:
         self.raw_data.append(file)
 
     def confirm_identical_filters_in_results(self, model):
+        """Return whether all instances of card with id 'model' have identical 'filter' values."""
         first_tags = ""
         for card in CSVProcessor.cards_in_csv(self.result, "model", model):
             if not first_tags:
@@ -128,7 +135,11 @@ class CSVProcessor:
 
     def remove_out_of_stock_new_cards(self):
         """Remove any cards from self.new_in_stock which don't have a 'filters' column."""
+        before_len = len(self.new_in_stock)
         self.new_in_stock = list(filter(lambda x: "filters" in x, self.new_in_stock))
+        after_len = len(self.new_in_stock)
+        self.cards_sold = before_len - after_len
+        print(f"Sold {self.cards_sold} unique new cards since intake.")
 
     def add_filter_to_new_cards(self):
         """Add self.filter to the 'filters' string of each card in self.new_in_stock."""
@@ -150,8 +161,8 @@ class CSVProcessor:
                 self.result.remove(CSVProcessor.card_in_csv(self.result, "model", model))
 
     def export(self):
-        """Write the contents of self.result to file output.csv in the local directory."""
-        with open("output.csv", "w", newline='') as csvfile:
+        """Write the contents of self.result to newinstock_{timestamp}.csv in the local directory."""
+        with open("newinstock_" + time.strftime("%Y-%m-%d_%H:%M") + ".csv", "w", newline='') as csvfile:
             fieldnames = ["product_name", "model", "filters"]
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             writer.writeheader()
