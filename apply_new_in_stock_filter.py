@@ -5,7 +5,8 @@ import os
 
 class CSVProcessor():
 
-    def __init__(self, filter_to_change_id="85"):
+    def __init__(self, filter_to_change_id="85", path=os.path.abspath(os.sep)):
+        self.path = path
         self.filter = filter_to_change_id
         self.raw_data=[]
         self.result = []
@@ -64,7 +65,7 @@ class CSVProcessor():
 
     def get_input_file_names(self):
         """Open file dialog and stow chosen filenames in self.file_names tuple."""
-        self.file_names = askopenfilenames(initialdir=os.path.abspath(os.sep),
+        self.file_names = askopenfilenames(initialdir=self.path,
                                            title="Select *all three* csv files!",
                                            filetypes=(("csv files", "*.csv"), ("all files", "*.*")))
 
@@ -73,16 +74,17 @@ class CSVProcessor():
         for filename in self.file_names:
             self.dump_csv(filename)
         for csvfile in self.raw_data:
-            def assign(obj):
-                obj = csvfile
-                obj.pop(-1)
             if csvfile[-1] == "new_in_stock":
-                assign(self.new_in_stock)
+                self.new_in_stock = csvfile
+                self.new_in_stock.pop(-1)
             elif csvfile[-1] == "old_in_stock":
-                assign(self.old_in_stock)
+                self.old_in_stock = csvfile
+                self.old_in_stock.pop(-1)
             else:
-                assign(self.in_stock)
+                self.in_stock = csvfile
+                self.in_stock.pop(-1)
 
+    # TODO Make this check to make sure the cards aren't in the new list!
     def remove_old_tags(self):
         """Remove the selected filter tag from cards in the 'old in stock' list."""
         for row in self.old_in_stock:
@@ -134,6 +136,6 @@ class CSVProcessor():
 
 
 if __name__ == "__main__":
-    processor = CSVProcessor()
+    processor = CSVProcessor(path="~/Downloads")
     processor.main()
 
