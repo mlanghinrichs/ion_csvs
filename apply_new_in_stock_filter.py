@@ -2,16 +2,12 @@ from tkinter.filedialog import askopenfilenames
 import csv
 import os
 import time
-from gi.repository import GLib
 
 
 class CSVProcessor:
 
-    def __init__(self, filter_to_change_id="85", path=GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DOWNLOAD)):
-        if os.path.exists(path):
-            self.path = path
-        else:
-            self.path = os.path.abspath(os.sep)
+    def __init__(self, filter_to_change_id="85", path=os.path.abspath(os.sep)):
+        self.path = path
         self.filter = filter_to_change_id
         self.raw_data = []
         self.result = []
